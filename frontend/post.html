@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>貼文詳細頁</title>
+  <script src="common.js"></script>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="post.css">
+</head>
+
+<body>
+  <div id="post-detail"></div>
+  <div id="site-footer"></div>
+
+  <script>
+
+    // ===================================================================
+    // 1. 靜態資料（不隨頁面互動改變的固定內容）
+    // ===================================================================
+
+    const icons = {
+      heart: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`,
+      comment: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>`,
+      repost: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>`,
+      share: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>`
+    };
+
+
+    // ===================================================================
+    // 2. 純資料處理函式（不碰 DOM 畫面，只負責讀取/組裝資料）
+    // ===================================================================
+
+    /**
+     * 從網址列取得目前要顯示的貼文 id。
+     *
+     * @returns {string|null} 貼文 id，網址上沒帶 id 時為 null
+     */
+    function getPostIdFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("id");
+    }
+
+    /**
+     * 把 ISO 時間字串轉換成 "YYYY年M月D日" 格式（繁體中文）。
+     *
+     * @param {string} timestamp - ISO 格式時間字串
+     * @returns {string} 格式化後的日期文字
+     */
+    function formatPostDate(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleDateString("zh-TW", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
+
+
+    // ===================================================================
+    // 3. 畫面渲染函式（負責把資料變成 HTML）
+    // ===================================================================
+
+    /**
+     * 組出單一則回覆的 HTML，含頭像、連接線、文字/媒體內容。
+     * 引用貼文（is_quote_post）沒有實際內容可顯示，改顯示提示文字。
+     *
+     * @param {object} reply - 單一則回覆的資料（text, images, is_quote_post）
+     * @returns {string} 這則回覆的 HTML 片段
+     */
+    function renderReply(reply) {
+      const replyMediaHtml = renderMediaList(reply.images);
+
+      const replyBodyHtml = reply.is_quote_post
+        ? `<p class="post-text quote-notice">僅在 Threads 上可見</p>`
+        : `<p class="post-text">${reply.text}</p>${replyMediaHtml}`;
+
+      return `
+        <div class="thread-item">
+          <div class="thread-avatar-col">
+            <img src="avatar.jpg" alt="brownian.motion.99" class="post-avatar post-avatar-small">
+            <div class="thread-line"></div>
+          </div>
+          <div class="reply-card">
+            <span class="post-username">brownian.motion.99</span>
+            ${replyBodyHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    /**
+     * 把單篇貼文的完整資料（本體 + 回覆）畫成 HTML，塞進畫面。
+     *
+     * @param {object} post - 後端回傳的單篇貼文資料
+     */
+    function renderPostDetail(post) {
+      const formattedDate = formatPostDate(post.timestamp);
+      const postMediaHtml = renderMediaList(post.images);
+
+      const generalKeywordsHtml = post.keywords.general
+        .map(word => `<span class="keyword-tag keyword-general">${word}</span>`)
+        .join("");
+
+      const specificKeywordsHtml = post.keywords.specific
+        .map(word => `<span class="keyword-tag keyword-specific">${word}</span>`)
+        .join("");
+
+      const repliesHtml = post.replies.map(renderReply).join("");
+
+      document.getElementById("post-detail").innerHTML = `
+        <div class="post-card">
+          <div class="post-header">
+            <img src="avatar.jpg" alt="brownian.motion.99" class="post-avatar">
+            <div class="post-header-text">
+              <span class="post-username">brownian.motion.99</span>
+              <span class="post-timestamp">${formattedDate}</span>
+            </div>
+          </div>
+          <p class="post-text">${post.text}</p>
+          ${postMediaHtml}
+          <div class="post-actions">
+            <span class="action-icon">${icons.heart}</span>
+            <span class="action-icon">${icons.comment}</span>
+            <span class="action-icon">${icons.repost}</span>
+            <span class="action-icon">${icons.share}</span>
+          </div>
+          <div class="keyword-list">
+            ${generalKeywordsHtml}
+            ${specificKeywordsHtml}
+          </div>
+        </div>
+        <div class="thread-replies">
+          ${repliesHtml}
+        </div>
+        <a href="${post.permalink}" target="_blank" class="permalink-link">在 Threads 上查看原文 →</a>
+      `;
+    }
+
+
+    // ===================================================================
+    // 4. 初始化（頁面載入時真正執行的進入點）
+    // ===================================================================
+
+    document.getElementById("site-footer").innerHTML = renderFooter();
+
+    const postId = getPostIdFromUrl();
+
+    fetch(`http://127.0.0.1:8000/posts/${postId}`)
+      .then(response => response.json())
+      .then(renderPostDetail);
+
+  </script>
+
+</body>
+
+</html>

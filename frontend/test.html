@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>每天分享一個大氣科學知識直到我沒梗</title>
+  <script src="common.js"></script>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="list.css">
+</head>
+
+<body class="page-wide">
+  <header class="site-header">
+    <p class="site-eyebrow">FIELD NOTES · ATMOSPHERIC SCIENCE</p>
+    <h1 class="site-title">每天分享一個大氣科學知識直到我沒梗</h1>
+  </header>
+
+  <div id="search-panel" class="search-panel">
+    <input type="text" id="text-input" placeholder="輸入想搜尋的內容">
+  </div>
+
+  <div class="filter-section">
+    <div class="keyword-filter-controls">
+      <button id="select-all-btn" type="button" class="text-btn">Select all</button>
+      <button id="clear-all-btn" type="button" class="text-btn">Clear all</button>
+      <div class="mode-toggle">
+        <label><input type="radio" name="keyword-mode" value="or" checked><span>OR</span></label>
+        <label><input type="radio" name="keyword-mode" value="and"><span>AND</span></label>
+      </div>
+    </div>
+    <div id="keyword-checkboxes" class="keyword-checkbox-list"></div>
+  </div>
+
+  <div id="post-list"></div>
+  <button id="load-more-btn" class="load-more-btn" type="button" style="display: none;">載入更多</button>
+  <p id="end-of-list" class="end-of-list" style="display: none;">已經到底了</p>
+
+  <div id="site-footer"></div>
+
+  <script>
+
+    // ===================================================================
+    // 1. State
+    // ===================================================================
+
+    const PAGE_SIZE = 20;
+    let currentOffset = 0;
+    let currentParams = new URLSearchParams();
+
+
+    // ===================================================================
+    // 2. Data processing functions
+    // ===================================================================
+
+    /**
+     * Get the values of checked keyword boxes
+     *
+     * @returns {string[]} checked keywords
+     */
+    function getSelectedKeywords() {
+      return Array.from(document.querySelectorAll(".keyword-checkbox:checked")).map(cb => cb.value);
+    }
+
+    /**
+     * Get the keyword filtering mode
+     *
+     * @returns {string} "or"/"and"
+     */
+    function getKeywordMode() {
+      return document.querySelector('input[name="keyword-mode"]:checked').value;
+    }
+
+    /**
+     * Build searching parameters for api
+     * limit/offset are not included
+     *
+     * @returns {URLSearchParams} A parameter object containing q, keywords and filtering mode
+     */
+    function buildSearchParams() {
+      const selectedKeywords = getSelectedKeywords();
+      const text = document.getElementById("text-input").value;
+
+      const params = new URLSearchParams();
+      if (selectedKeywords.length > 0) {
+        params.append("mode", getKeywordMode());
+        selectedKeywords.forEach(word => params.append("keywords", word));
+      }
+      if (text) {
+        params.append("q", text);
+      }
+      return params;
+    }
+
+    /**
+     * Converting timestamp from ISO to YYYY.MM.DD
+     *
+     * @param {string} timestamp - ISO format
+     * @returns {string} YYYY.MM.DD
+     */
+    function formatObservationDate(timestamp) {
+      const date = new Date(timestamp);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}·${month}·${day}`;
+    }
+
+
+    // ===================================================================
+    // 3. Window rendering functions
+    // ===================================================================
+
+    /**
+     * 把貼文資料畫成卡片，塞進列表容器；並依照 has_more 更新「載入更多」按鈕狀態。
+     *
+     * @param {object} data - 後端回傳的搜尋結果，含 posts 陣列與 has_more 布林值
+     * @param {boolean} [append=false] - true 時附加在現有列表後面（載入更多），false 時整個取代（新搜尋）
+     */
+    function renderPostList(data, append = false) {
+      const html = data.posts.map(post => {
+        const formattedDate = formatObservationDate(post.timestamp);
+        const preview = post.text.slice(21, 70) + "...";
+        const thumbnailHtml = renderThumbnail(post.images);
+        const keywordsHtml = post.keywords
+          .map(word => `<span class="keyword-tag">${word}</span>`)
+          .join("");
+
+        return `
+          <a href="post.html?id=${post.id}" class="post-card">
+            ${thumbnailHtml}
+            <p class="post-date">${formattedDate}</p>
+            <div class="post-preview">
+              <p class="post-text">${preview}</p>
+            </div>
+            <div class="keyword-list">${keywordsHtml}</div>
+          </a>
+        `;
+      }).join("");
+
+      const postList = document.getElementById("post-list");
+      if (append) {
+        postList.insertAdjacentHTML("beforeend", html);
+      } else {
+        postList.innerHTML = html;
+      }
+
+      document.getElementById("load-more-btn").style.display = data.has_more ? "block" : "none";
+      document.getElementById("end-of-list").style.display = data.has_more ? "none" : "block";
+    }
+
+
+    // ===================================================================
+    // 4. 網址列處理（保存/還原篩選狀態，讓瀏覽器上一頁、書籤、分享連結都能運作）
+    // ===================================================================
+
+    /**
+     * 把目前的篩選參數反映到網址列，不觸發頁面重新載入。
+     * 用 replaceState 而非 pushState，避免每次篩選都產生一筆瀏覽紀錄。
+     *
+     * @param {URLSearchParams} params - 目前的篩選參數（不含分頁資訊）
+     */
+    function updateUrl(params) {
+      const query = params.toString();
+      const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+      history.replaceState(null, "", newUrl);
+    }
+
+    /**
+     * 從目前網址列的查詢參數，還原文字輸入框、AND/OR 選項、關鍵字勾選狀態。
+     * 必須在關鍵字核取方塊已經動態建立完成之後才能呼叫。
+     */
+    function restoreFiltersFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+
+      const text = params.get("q") || "";
+      document.getElementById("text-input").value = text;
+
+      const mode = params.get("mode") || "or";
+      const modeRadio = document.querySelector(`input[name="keyword-mode"][value="${mode}"]`);
+      if (modeRadio) modeRadio.checked = true;
+
+      const selectedKeywords = params.getAll("keywords");
+      selectedKeywords.forEach(word => {
+        const checkbox = document.querySelector(`.keyword-checkbox[value="${CSS.escape(word)}"]`);
+        if (checkbox) checkbox.checked = true;
+      });
+    }
+
+
+    // ===================================================================
+    // 5. 跟後端溝通的函式
+    // ===================================================================
+
+    /**
+     * 依照目前的 currentParams 跟 currentOffset，打 /posts/search 並渲染結果。
+     *
+     * @param {boolean} append - true 時是「載入更多」，false 時是全新搜尋
+     */
+    function fetchAndRenderPosts(append) {
+      const params = new URLSearchParams(currentParams);
+      params.append("limit", PAGE_SIZE);
+      params.append("offset", currentOffset);
+
+      fetch(`http://127.0.0.1:8000/posts/search?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => renderPostList(data, append));
+    }
+
+    /**
+     * 使用者改變任何篩選條件時呼叫：重設分頁位置、重新組參數、更新網址、重新查詢。
+     */
+    function performSearch() {
+      currentOffset = 0;
+      currentParams = buildSearchParams();
+      updateUrl(currentParams);
+      fetchAndRenderPosts(false);
+    }
+
+    /**
+     * 點擊「載入更多」時呼叫：往後翻一頁，用相同的篩選條件附加更多結果。
+     */
+    function loadMore() {
+      currentOffset += PAGE_SIZE;
+      fetchAndRenderPosts(true);
+    }
+
+
+    // ===================================================================
+    // 6. 事件監聽掛載
+    // ===================================================================
+
+    document.getElementById("text-input").addEventListener("input", performSearch);
+
+    document.querySelectorAll('input[name="keyword-mode"]').forEach(radio => {
+      radio.addEventListener("change", performSearch);
+    });
+
+    document.getElementById("select-all-btn").addEventListener("click", () => {
+      document.querySelectorAll(".keyword-checkbox").forEach(cb => cb.checked = true);
+      performSearch();
+    });
+
+    document.getElementById("clear-all-btn").addEventListener("click", () => {
+      document.querySelectorAll(".keyword-checkbox").forEach(cb => cb.checked = false);
+      performSearch();
+    });
+
+    document.getElementById("load-more-btn").addEventListener("click", loadMore);
+
+
+    // ===================================================================
+    // 7. 初始化（頁面載入時真正執行的進入點）
+    // ===================================================================
+
+    document.getElementById("site-footer").innerHTML = renderFooter();
+
+    fetch("http://127.0.0.1:8000/keywords")
+      .then(response => response.json())
+      .then(data => {
+        const container = document.getElementById("keyword-checkboxes");
+        container.innerHTML = data.general.map(item => `
+          <label class="keyword-checkbox-item">
+            <input type="checkbox" class="keyword-checkbox" value="${item.word}">
+            ${item.word}
+            <span class="keyword-count">${item.count}</span>
+          </label>
+        `).join("");
+
+        container.querySelectorAll(".keyword-checkbox").forEach(checkbox => {
+          checkbox.addEventListener("change", performSearch);
+        });
+
+        restoreFiltersFromUrl();
+        performSearch();
+      });
+
+  </script>
+
+</body>
+
+</html>

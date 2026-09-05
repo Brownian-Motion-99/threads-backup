@@ -1,0 +1,18 @@
+/* ===== 貼文列表頁專用（test.html） ===== */
+
+#post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  body.page-wide {
+    max-width: 1000px;
+  }
+
+  #post-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

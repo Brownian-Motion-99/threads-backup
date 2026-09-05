@@ -1,0 +1,26 @@
+/* ===== 全站共用：重置與基礎排版 ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700&family=Noto+Sans+TC:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --color-bg: #F6F7F5;
+  --color-ink: #232823;
+  --color-accent: #3B5B74;
+  --color-muted: #8A8A82;
+  --color-border: #DCDAD2;
+  --color-tag-bg: #EDEEEA;
+
+  --font-serif: 'Noto Serif TC', serif;
+  --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+body {
+  font-family: -apple-system, "PingFang TC", sans-serif;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 24px;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  line-height: 1.6;
+}

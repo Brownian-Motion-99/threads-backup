@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+*.jpg
+*.mp4
+tagging/keyword_update_template.md
+.DS_Store
+media/
+.vscode/
+.pytest_cache/
+*.dump
+docker-compose.yml
