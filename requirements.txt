@@ -19,7 +19,7 @@ jiter==0.16.0
 jmespath==1.1.0
 Mako==1.4.1
 MarkupSafe==3.0.3
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1785888127/work
+packaging==26.3
 psycopg==3.3.4
 psycopg-binary==3.3.4
 pydantic==2.13.5
