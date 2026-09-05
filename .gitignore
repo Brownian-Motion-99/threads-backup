@@ -11,4 +11,3 @@ media/
 .vscode/
 .pytest_cache/
 *.dump
-docker-compose.yml

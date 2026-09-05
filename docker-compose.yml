@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:17
+    container_name: threads-backup-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: $DB_USER
+      POSTGRES_PASSWORD: $DB_PASSWORD
+      POSTGRES_DB: $DB_NAME
+    ports:
+      - "$DB_PORT:5432"
+    volumes:
+      - pgdata-17-test:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: threads-backup-app
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: threads-backup-db
+    depends_on:
+      - db
+    volumes:
+      - ./media:/app/media
+
+  jobs:
+    build: .
+    container_name: threads-backup-jobs
+    command: python -m common.run_daily_sync
+    profiles: ["jobs"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: threads-backup-db
+    depends_on:
+      - db
+    volumes:
+      - ./media:/app/media
+
+volumes:
+  pgdata:
+  pgdata-17-test:
