@@ -34,9 +34,9 @@ function renderFooter() {
       <div class="footer-links">
         <a href="https://www.threads.com/@brownian.motion.99" target="_blank">Threads</a>
         <a href="mailto:chunhaoc777@gmail.com">Email</a>
-        <a href="#" class="footer-link-disabled" title="尚未公開">GitHub</a>
+        <a href="https://github.com/Brownian-Motion-99/threads-backup.git">GitHub</a>
       </div>
-      <p class="footer-meta">© 2026 brownian.motion.99 · v2026.08</p>
+      <p class="footer-meta">© 2026 brownian.motion.99 · v2026.09</p>
     </footer>
   `;
 }
