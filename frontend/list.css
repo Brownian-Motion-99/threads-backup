@@ -16,3 +16,38 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+.filter-toggle-btn {
+  display: none;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 15px;
+  text-align: left;
+}
+
+@media (max-width: 700px) {
+  .filter-toggle-btn {
+    display: block;
+  }
+
+  .filter-section {
+    display: none;
+  }
+
+  .filter-section.expanded {
+    display: block;
+  }
+
+  .keyword-checkbox-list {
+    grid-template-columns: 1fr;
+  }
+
+  .keyword-checkbox-item {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}

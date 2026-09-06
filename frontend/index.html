@@ -20,6 +20,10 @@
     <input type="text" id="text-input" placeholder="輸入想搜尋的內容">
   </div>
 
+  <button id="filter-toggle-btn" type="button" class="filter-toggle-btn">
+    篩選 <span id="filter-toggle-icon">▾</span>
+  </button>
+
   <div class="filter-section">
     <div class="keyword-filter-controls">
       <button id="select-all-btn" type="button" class="text-btn">Select all</button>
@@ -247,6 +251,13 @@
     });
 
     document.getElementById("load-more-btn").addEventListener("click", loadMore);
+
+    document.getElementById("filter-toggle-btn").addEventListener("click", () => {
+      const section = document.getElementById("filter-section");
+      const icon = document.getElementById("filter-toggle-icon");
+      const isExpanded = section.classList.toggle("expanded");
+      icon.textContent = isExpanded ? "▴" : "▾";
+    });
 
 
     // ===================================================================
