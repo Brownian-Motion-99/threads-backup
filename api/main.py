@@ -123,7 +123,10 @@ def read_root():
 
 
 @app.get("/posts")
-def get_posts(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0):
+def get_posts(
+    limit: int = Query(default = DEFAULT_PAGE_SIZE, ge = 1, le = MAXIMUM_PAGE_SIZE),
+    offset: int = Query(default = 0, ge = 0)
+):
     """
     Main workhorse API for homepage.
     Fetching posts from the database, returning a list of dictionaries.
@@ -143,24 +146,19 @@ def get_posts(limit: int = DEFAULT_PAGE_SIZE, offset: int = 0):
         Each post is stored in a dictionary, including id, text, timestamp, images and general keywords.
     
     """
-    limit = min(limit, MAXIMUM_PAGE_SIZE)
-    
-    conn = get_readonly_connection()
-    cur = conn.cursor()
+    with get_readonly_connection() as conn:
+        with conn.cursor() as cur:
 
-    cur.execute(
-        "SELECT id, text, timestamp FROM posts ORDER BY timestamp DESC LIMIT %s OFFSET %s",
-        (limit + 1, offset)
-    )
-    post_rows = cur.fetchall()
+            cur.execute(
+                "SELECT id, text, timestamp FROM posts ORDER BY timestamp DESC LIMIT %s OFFSET %s",
+                (limit + 1, offset)
+            )
+            post_rows = cur.fetchall()
 
-    has_more = len(post_rows) > limit
-    post_rows = post_rows[:limit]
+            has_more  = len(post_rows) > limit
+            post_rows = post_rows[:limit]
 
-    posts = build_posts(cur, post_rows)
-
-    cur.close()
-    conn.close()
+            posts = build_posts(cur, post_rows)
         
     return {"posts": posts, "has_more": has_more}
 
@@ -181,25 +179,22 @@ def get_keywords():
         A dictionary containing general keywords.
     
     """
-    conn = get_readonly_connection()
-    cur  = conn.cursor()
+    with get_readonly_connection() as conn:
+        with conn.cursor() as cur:
 
-    cur.execute(
-        """
-        SELECT k.word, COUNT(DISTINCT pk.post_id)
-        FROM keywords k
-        LEFT JOIN post_keywords pk ON pk.keyword_id = k.id
-        WHERE k.category = 'general'
-        GROUP BY k.word
-        ORDER BY k.word
-        """
-    )
-    general = [{"word": row[0], "count": row[1]} for row in cur.fetchall()]
+            cur.execute(
+                """
+                SELECT k.word, COUNT(DISTINCT pk.post_id)
+                FROM keywords k
+                LEFT JOIN post_keywords pk ON pk.keyword_id = k.id
+                WHERE k.category = 'general'
+                GROUP BY k.word
+                ORDER BY k.word
+                """
+            )
+            general = [{"word": row[0], "count": row[1]} for row in cur.fetchall()]
     
-    cur.close()
-    conn.close()
-    
-    keywords = {"general": general}
+            keywords = {"general": general}
     
     return keywords
 
@@ -210,8 +205,8 @@ def search_posts(
     q: str = None, 
     keywords: list[str] = Query(default=None), 
     mode: str = "or", 
-    limit: int = DEFAULT_PAGE_SIZE,
-    offset: int = 0,
+    limit: int = Query(default = DEFAULT_PAGE_SIZE, ge = 1, le = MAXIMUM_PAGE_SIZE),
+    offset: int = Query(default = 0, ge = 0),
 ):
     """
     Searching posts by optioinal keyword filter and/or optional text search.
@@ -236,72 +231,65 @@ def search_posts(
         List of post dictionaries that match the query
     
     """
-    limit = min(limit, MAXIMUM_PAGE_SIZE)
-    
-    conn = get_readonly_connection()
-    cur  = conn.cursor()
+    with get_readonly_connection() as conn:
+        with conn.cursor() as cur:
 
-    conditions = []
-    params     = []
+            conditions = []
+            params     = []
 
-    if keywords:
-        if mode == "and":
+            if keywords:
+                if mode == "and":
+                    cur.execute(
+                        """
+                        SELECT DISTINCT p.id, p.text, p.timestamp
+                        FROM posts p
+                        JOIN post_keywords pk ON p.id = pk.post_id
+                        JOIN keywords k ON pk.keyword_id = k.id
+                        WHERE k.category = 'general' AND k.word = ANY(%s)
+                        GROUP BY p.id, p.text, p.timestamp
+                        HAVING COUNT(DISTINCT k.word) = %s
+                        ORDER BY p.timestamp DESC
+                        """,
+                        (keywords, len(keywords))
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT p.id, p.text, p.timestamp
+                        FROM posts p
+                        JOIN post_keywords pk ON p.id = pk.post_id
+                        JOIN keywords k ON pk.keyword_id = k.id
+                        WHERE k.category = 'general' AND k.word = ANY(%s)
+                        ORDER BY p.timestamp DESC
+                        """,
+                        (keywords,)
+                    )
+                matches_ids = [row[0] for row in cur.fetchall()]
+                if not matches_ids:
+                    return {"posts": [], "has_more": False}
+                conditions.append("id = ANY(%s)")
+                params.append(matches_ids)
+
+            if q:
+                conditions.append("text ILIKE %s")
+                params.append(f"%{q}%")
+
+            where_clause = " AND ".join(conditions) if conditions else "TRUE"
             cur.execute(
-                """
-                SELECT DISTINCT p.id, p.text, p.timestamp
-                FROM posts p
-                JOIN post_keywords pk ON p.id = pk.post_id
-                JOIN keywords k ON pk.keyword_id = k.id
-                WHERE k.category = 'general' AND k.word = ANY(%s)
-                GROUP BY p.id, p.text, p.timestamp
-                HAVING COUNT(DISTINCT k.word) = %s
-                ORDER BY p.timestamp DESC
+                f"""
+                SELECT id, text, timestamp FROM posts
+                WHERE {where_clause}
+                ORDER BY timestamp DESC
+                LIMIT %s OFFSET %s
                 """,
-                (keywords, len(keywords))
+                params + [limit + 1, offset]
             )
-        else:
-            cur.execute(
-                """
-                SELECT DISTINCT p.id, p.text, p.timestamp
-                FROM posts p
-                JOIN post_keywords pk ON p.id = pk.post_id
-                JOIN keywords k ON pk.keyword_id = k.id
-                WHERE k.category = 'general' AND k.word = ANY(%s)
-                ORDER BY p.timestamp DESC
-                """,
-                (keywords,)
-            )
-        matches_ids = [row[0] for row in cur.fetchall()]
-        if not matches_ids:
-            cur.close()
-            conn.close()
-            return {"posts": [], "has_more": False}
-        conditions.append("id = ANY(%s)")
-        params.append(matches_ids)
 
-    if q:
-        conditions.append("text ILIKE %s")
-        params.append(f"%{q}%")
+            post_rows = cur.fetchall()
+            has_more  = len(post_rows) > limit
+            post_rows = post_rows[:limit]
 
-    where_clause = " AND ".join(conditions) if conditions else "TRUE"
-    cur.execute(
-        f"""
-        SELECT id, text, timestamp FROM posts
-        WHERE {where_clause}
-        ORDER BY timestamp DESC
-        LIMIT %s OFFSET %s
-        """,
-        params + [limit + 1, offset]
-    )
-
-    post_rows = cur.fetchall()
-    has_more  = len(post_rows) > limit
-    post_rows = post_rows[:limit]
-
-    posts = build_posts(cur, post_rows)
-
-    cur.close()
-    conn.close()
+            posts = build_posts(cur, post_rows)
     
     return {"posts": posts, "has_more": has_more}
 
@@ -324,66 +312,61 @@ def get_post(post_id: str):
         A dictionary including id, text, timestamp, images, replies, keywords and permanent link.
     
     """
-    # --- Retrieve data from database --- #
-    conn = get_readonly_connection()
-    cur  = conn.cursor()
+    with get_readonly_connection() as conn:
+        with conn.cursor() as cur:
+            
+            # --- Retrieve data from database --- #
+            # Fetching a post
+            cur.execute(
+                "SELECT id, text, timestamp, permalink, is_quote_post FROM posts WHERE id = %s",
+                (post_id,)
+            )
+            post_row = cur.fetchone()
 
-    # Fetching a post
-    cur.execute(
-        "SELECT id, text, timestamp, permalink, is_quote_post FROM posts WHERE id = %s",
-        (post_id,)
-    )
-    post_row = cur.fetchone()
+            if post_row is None:
+                return {"error": "Post not found"}
 
-    if post_row is None:
-        cur.close()
-        conn.close()
-        return {"error": "Post not found"}
+            # Fetching images in a post
+            cur.execute(
+                "SELECT local_path FROM images WHERE root_post_id = %s",
+                (post_id,)
+            )
+            post_images = [row[0] for row in cur.fetchall()]
+            
+            # Fetching keywords in a post
+            cur.execute(
+                """
+                SELECT k.word, k.category
+                FROM post_keywords pk
+                JOIN keywords k ON pk.keyword_id = k.id
+                WHERE pk.post_id = %s
+                """,
+                (post_id,)
+            )
+            keyword_rows = cur.fetchall()
 
-    # Fetching images in a post
-    cur.execute(
-        "SELECT local_path FROM images WHERE root_post_id = %s",
-        (post_id,)
-    )
-    post_images = [row[0] for row in cur.fetchall()]
-    
-    # Fetching keywords in a post
-    cur.execute(
-        """
-        SELECT k.word, k.category
-        FROM post_keywords pk
-        JOIN keywords k ON pk.keyword_id = k.id
-        WHERE pk.post_id = %s
-        """,
-        (post_id,)
-    )
-    keyword_rows = cur.fetchall()
+            # Fetching replies in a post
+            cur.execute(
+                "SELECT id, text, timestamp, is_quote_post FROM replies WHERE root_post_id = %s ORDER BY timestamp ASC",
+                (post_id,)
+            )
+            reply_rows = cur.fetchall()
 
-    # Fetching replies in a post
-    cur.execute(
-        "SELECT id, text, timestamp, is_quote_post FROM replies WHERE root_post_id = %s ORDER BY timestamp ASC",
-        (post_id,)
-    )
-    reply_rows = cur.fetchall()
-
-    # Fetching images in the replies
-    cur.execute(
-        """
-        SELECT root_reply_id, local_path FROM images
-        WHERE root_reply_id IN (
-            SELECT id FROM replies WHERE root_post_id = %s
-        )
-        """,
-        (post_id,)
-    )
-    images_by_reply = {}
-    for root_reply_id, local_path in cur.fetchall():
-        image_url = f"{local_path}"
-        images_by_reply.setdefault(root_reply_id, []).append(image_url)
-
-    cur.close()
-    conn.close()
-    # --- Retrieve data from database --- #
+            # Fetching images in the replies
+            cur.execute(
+                """
+                SELECT root_reply_id, local_path FROM images
+                WHERE root_reply_id IN (
+                    SELECT id FROM replies WHERE root_post_id = %s
+                )
+                """,
+                (post_id,)
+            )
+            images_by_reply = {}
+            for root_reply_id, local_path in cur.fetchall():
+                image_url = f"{local_path}"
+                images_by_reply.setdefault(root_reply_id, []).append(image_url)
+            # --- Retrieve data from database --- #
     
     # --- Handling keywords --- #
     general_keywords  = [word for word, category in keyword_rows if category == "general"]
