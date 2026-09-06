@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://th-f8fb9499f80d49bf84e92d8396221c74.ecs.ap-east-2.on.aws"
+const API_BASE_URL = "d6a26160fio9p.cloudfront.net"
 
 function renderMedia(url) {
   if (url.endsWith(".mp4")) {
