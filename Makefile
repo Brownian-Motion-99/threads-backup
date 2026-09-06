@@ -1,4 +1,4 @@
-.PHONY: db import schema
+.PHONY: db import schema awssync
 
 db:
 	docker exec -it threads-backup-db psql -U postgres -d threads_backup
@@ -11,3 +11,6 @@ schema:
 
 backfill:
 	python -m ingestion.backfill_quote_post
+
+awssync:
+	aws s3 cp ./frontend s3://threads-backup-frontend --recursive --exclude "*" --include "*.html" --content-type "text/html; charset=utf-8"
