@@ -1,7 +1,7 @@
 # %% Packages
 import os
 import psycopg
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # %% Global Variables
@@ -34,12 +34,14 @@ def get_readonly_connection():
     
     """
     return psycopg.connect(
-        host     = os.environ["DB_READER_HOST"],
-        port     = os.environ["DB_READER_PORT"],
-        dbname   = os.environ["DB_NAME"],
-        user     = os.environ["DB_READER_USER"],
-        password = os.environ["DB_READER_PASSWORD"],
-        options = "-c statement_timeout=5000",
+        host            = os.environ["DB_READER_HOST"],
+        port            = os.environ["DB_READER_PORT"],
+        dbname          = os.environ["DB_NAME"],
+        user            = os.environ["DB_READER_USER"],
+        password        = os.environ["DB_READER_PASSWORD"],
+        options         = "-c statement_timeout=5000",
+        connect_timeout = 10,
+        sslmode         = "require",
     )
 
 
@@ -108,6 +110,12 @@ def build_posts(cur: psycopg.Cursor, post_rows: list):
 
 
 # %% get functions
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204)
+
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello from Threads Backup API"}
