@@ -1,3 +1,5 @@
+const API_BASE_URL = "https://th-f8fb9499f80d49bf84e92d8396221c74.ecs.ap-east-2.on.aws"
+
 function renderMedia(url) {
   if (url.endsWith(".mp4")) {
     return `<video src="${url}" controls class="post-media"></video>`;

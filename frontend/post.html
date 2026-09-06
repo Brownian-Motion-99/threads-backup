@@ -146,7 +146,7 @@
 
     const postId = getPostIdFromUrl();
 
-    fetch(`http://127.0.0.1:8000/posts/${postId}`)
+    fetch(`${API_BASE_URL}/posts/${postId}`)
       .then(response => response.json())
       .then(renderPostDetail);
 

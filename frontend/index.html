@@ -201,7 +201,7 @@
       params.append("limit", PAGE_SIZE);
       params.append("offset", currentOffset);
 
-      fetch(`http://127.0.0.1:8000/posts/search?${params.toString()}`)
+      fetch(`${API_BASE_URL}/posts/search?${params.toString()}`)
         .then(response => response.json())
         .then(data => renderPostList(data, append));
     }
@@ -254,7 +254,7 @@
 
     document.getElementById("site-footer").innerHTML = renderFooter();
 
-    fetch("http://127.0.0.1:8000/keywords")
+    fetch(`${API_BASE_URL}/keywords`)
       .then(response => response.json())
       .then(data => {
         const container = document.getElementById("keyword-checkboxes");
