@@ -15,5 +15,6 @@ backfill:
 deploy-frontend:
 	/Users/prcpltwfkwd/.local/bin/aws s3 cp ./frontend s3://threads-backup-frontend --recursive --exclude "*" --include "*.html" --content-type "text/html; charset=utf-8"
 	/Users/prcpltwfkwd/.local/bin/aws s3 cp ./frontend s3://threads-backup-frontend --recursive --exclude "*" --include "*.js" --content-type "text/javascript; charset=utf-8"
-	/Users/prcpltwfkwd/.local/bin/aws cloudfront create-invalidation --distribution-id E26ZJCZ83G0UUH --paths "/*"
 	/Users/prcpltwfkwd/.local/bin/aws s3 cp ./frontend s3://threads-backup-frontend --recursive --exclude "*" --include "*.css" --content-type "text/css; charset=utf-8"
+	/Users/prcpltwfkwd/.local/bin/aws s3 cp ./frontend/robots.txt s3://threads-backup-frontend/robots.txt --content-type "text/plain"
+	/Users/prcpltwfkwd/.local/bin/aws cloudfront create-invalidation --distribution-id E26ZJCZ83G0UUH --paths "/*"
