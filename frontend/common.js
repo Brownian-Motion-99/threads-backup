@@ -82,10 +82,8 @@ function hideLoadingOverlay() {
 
 /**
  * Switch the overlay into an error state with a retry button.
- *
- * @param {Function} retryFn - called when the user clicks retry
  */
-function showLoadingError(retryFn) {
+function showLoadingError() {
   clearTimeout(loadingMessageTimer);
   setLoadingMessage("連線失敗，請確認網路狀況後重試。");
 }
