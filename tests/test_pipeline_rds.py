@@ -42,11 +42,11 @@ def get_rds_testing_connection():
     
     """
     return psycopg.connect(
-        host     = os.environ["DB_HOST"],
-        port     = os.environ["DB_PORT"],
-        dbname   = os.environ["DB_NAME"],
-        user     = os.environ["DB_USER"],
-        password = os.environ["DB_PASSWORD"]
+        host     = os.environ["DB_WRITER_HOST"],
+        port     = os.environ["DB_WRITER_PORT"],
+        dbname   = os.environ["DB_WRITER_NAME"],
+        user     = os.environ["DB_WRITER_USER"],
+        password = os.environ["DB_WRITER_PASSWORD"]
     )
 
 
@@ -65,14 +65,14 @@ def db_cursor_rds():
     psycopg.connect object
 
     """
-    db_host = os.environ.get("DB_HOST", "")
-    if db_host in ("", "localhost", "127.0.0.1"):
+    db_port = os.environ.get("DB_WRITER_PORT", "")
+    if db_port in ("", "5433"):
         pytest.fail(
-            "DB_HOST: f'{db_host!r}'"
-            "The host looks like a local host."
+            "DB_PORT: f'{db_port!r}'"
+            "This is the port for local testing."
         )
 
-    print(f"\n[Layer 2] host: {db_host}")  # -v -s
+    print(f"\n[Layer 2] port: {db_port}")  # -v -s
 
     conn = get_rds_testing_connection()
     cur = conn.cursor()

@@ -33,14 +33,15 @@ flowchart TD
         CFAPI["CloudFront<br/>API · Shield Standard"]
         ALB["ALB<br/>threads-backup-alb-sg · 443"]
         ECS["ECS Fargate task<br/>threads-backup-ecs-task-sg · 8000<br/>FastAPI"]
-        RDS[("Aurora PostgreSQL Serverless v2<br/>threads-backup-rds-sg · 5432<br/>reader / writer 分離")]
+        EC2["t4g.nano<br/>bastion machine<br/>threads-backup-bastion-sg"]
+        RDS[("Aurora PostgreSQL Serverless v2<br/>threads-backup-rds-sg · 5432<br/>reader / writer 分離<br/>無 public access，僅 ECS + bastion 可連")]
         S3Media[("S3 media bucket<br/>public GetObject only")]
         S3Frontend[("S3 frontend bucket")]
         Secrets["Secrets Manager<br/>DB_READER_PASSWORD"]
     end
 
     subgraph local["本機環境（ingestion / tagging，規劃遷移雲端）"]
-        Jobs["ingestion + tagging script<br/>手動觸發"]
+        Jobs["ingestion + tagging script<br/>固定 IP 機器・手動觸發"]
     end
 
     ThreadsAPI["Threads API<br/>Fetches posts, media"]
@@ -54,9 +55,10 @@ flowchart TD
     ECS -->|queries| RDS
     ECS --> S3Media
     ECS -.->|GetSecretValue| Secrets
+    EC2 -->|5432| RDS
 
-    Jobs -.->|暫時直連 5432| RDS
-    Jobs -->|下載| S3Media
+    Jobs -->|SSH tunnel · 22<br/>僅限固定 IP| EC2
+    Jobs -->|上傳| S3Media
     ThreadsAPI --> Jobs
     AnthropicAPI --> Jobs
 
@@ -66,8 +68,8 @@ flowchart TD
 這個服務由 frontend、api、db、jobs 四個部分組成：
 - frontend：靜態網頁，透過 S3 + CloudFront（OAC）發佈
 - api：ECS Fargate 上的 FastAPI，經 ALB／CloudFront 對外提供查詢與篩選功能，透過 Secrets Manager 取得資料庫密碼
-- db：Aurora PostgreSQL Serverless v2，reader／writer 角色分離，儲存貼文、回覆、標記與圖片 id
-- jobs：批次執行抓取、標記貼文工作，**目前仍在本機執行、透過固定 IP 直連 RDS**，為手動觸發，規劃遷移至雲端排程自動執行
+- db：Aurora PostgreSQL Serverless v2，reader／writer 角色分離，儲存貼文、回覆、標記與圖片 id。已關閉 public access，`threads-backup-rds-sg` 僅允許來自 ECS task 與 bastion 兩個來源
+- jobs：批次執行抓取、標記貼文工作，**目前仍在本機執行**，透過固定 IP 的機器經 SSH tunnel 連上 EC2 bastion 後再存取 RDS（不再直連），為手動觸發，規劃遷移至雲端排程自動執行
 
 ```mermaid
 flowchart LR
@@ -83,6 +85,7 @@ flowchart LR
         Review["human review<br/>手動合併同義詞"]
     end
 
+    Bastion["EC2 bastion<br/>（已部署於 AWS）"]
     DB[("Aurora PostgreSQL<br/>posts / tags")]
 
     subgraph serve["查詢與顯示（AWS）"]
@@ -91,7 +94,8 @@ flowchart LR
     end
 
     Threads --> Ingest
-    Ingest -.->|暫時直連寫入| DB
+    Ingest -->|proxy 僅限固定 IP| Bastion
+    Bastion -->|5432| DB
     Ingest -->|上傳| Media
     DB --> Haiku
     Haiku -.->|寫入分類| DB
@@ -106,7 +110,9 @@ flowchart LR
     classDef planned stroke-dasharray: 5 5
     class ingest,tag,Ingest,Haiku,Sonnet,Review planned
 ```
-透過 threads api 自動抓取貼文後寫入資料庫，圖片與影片縮圖上傳至 S3 media bucket。透過 anthropic api 呼叫 claude-haiku 進行貼文分類、呼叫 claude-sonnet 生成關鍵字以標記貼文，LLM 生成之關鍵字需定期人工審核。ingestion 與 tagging 目前暫時在本機以固定 IP 直連 Aurora 執行（圖中虛線部分），查詢與顯示則已全面部署於 AWS（ECS Fargate + S3 + CloudFront）。
+- 透過 threads api 自動抓取貼文後寫入資料庫，圖片與影片縮圖上傳至 S3 media bucket。
+- 透過 anthropic api 呼叫 claude-haiku 進行貼文分類、呼叫 claude-sonnet 生成關鍵字以標記貼文，LLM 生成之關鍵字需定期人工審核。
+- ingestion 與 tagging 目前仍在本機執行，透過固定 IP 的機器經 EC2 bastion 中繼連至 Aurora（Aurora 無 public access，僅接受 ECS 與 bastion 的連線），查詢與顯示則已全面部署於 AWS（ECS Fargate + S3 + CloudFront）。
 
 ## Database
 
@@ -167,7 +173,7 @@ erDiagram
 - Framework: Python 3.12, FastAPI, vanilla JS
 - Database: Aurora PostgreSQL Serverless v2 (`psycopg3`)
 - Containerization: Docker (multi-arch build for Fargate), ECR
-- Cloud infra: ECS Fargate (Express Mode), ALB, CloudFront + S3 (frontend), S3 (media), Secrets Manager, CloudWatch Logs
+- Cloud infra: ECS Fargate (Express Mode), ALB, CloudFront + S3 (frontend), S3 (media), Secrets Manager, CloudWatch Logs, EC2 (bastion machine，供 ingestion/tagging 存取 RDS；RDS 無 public access)
 - Fetching posts with threads api
 - Categorizing posts wtih `claude-haiku`, extracting keywords from posts with `claude-sonnet`
 

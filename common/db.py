@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # %% General Functions
-def get_connection():
+def get_local_connection():
     """
     Getting a connection to database
     
@@ -26,6 +26,27 @@ def get_connection():
         dbname   = os.environ["DB_NAME"],
         user     = os.environ["DB_USER"],
         password = os.environ["DB_PASSWORD"]
+    )
+    
+def get_connection():
+    """
+    Getting a connection to database
+    
+    Parameters
+    ----------
+    None
+    
+    Returns
+    -------
+    psycopg.connect object
+    
+    """
+    return psycopg.connect(
+        host     = os.environ["DB_WRITER_HOST"],
+        port     = os.environ["DB_WRITER_PORT"],
+        dbname   = os.environ["DB_WRITER_NAME"],
+        user     = os.environ["DB_WRITER_USER"],
+        password = os.environ["DB_WRITER_PASSWORD"]
     )
 
 
