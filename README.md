@@ -1,5 +1,6 @@
 # threads-backup
 [![Threads](https://img.shields.io/badge/Threads-@brownian.motion.99-000000?logo=Threads&logoColor=white)](https://www.threads.net/@brownian.motion.99)
+[![Powered by AWS CloudFront](https://img.shields.io/badge/Powered%20by-AWS%20CloudFront-FF9900?logo=amazonaws&logoColor=white)](https://d3dqh426fzhnl5.cloudfront.net)
 
 科學傳播系列《每天分享一個大氣科學知識直到我沒梗》的備份。
 
@@ -25,65 +26,87 @@
 
 ```mermaid
 flowchart TD
-    
     Browser["Browser<br/>HTML/CSS/JS frontend"]
 
-    subgraph docker["Docker Compose"]
-        App["app · FastAPI<br/>API + media serving"]
-        DB[("db · Postgres<br/>Posts + replies")]
-        Jobs["jobs · batch<br/>Manual trigger"]
+    subgraph aws["AWS Cloud"]
+        CFFrontend["CloudFront<br/>OAC → S3"]
+        CFAPI["CloudFront<br/>API · Shield Standard"]
+        ALB["ALB<br/>threads-backup-alb-sg · 443"]
+        ECS["ECS Fargate task<br/>threads-backup-ecs-task-sg · 8000<br/>FastAPI"]
+        RDS[("Aurora PostgreSQL Serverless v2<br/>threads-backup-rds-sg · 5432<br/>reader / writer 分離")]
+        S3Media[("S3 media bucket<br/>public GetObject only")]
+        S3Frontend[("S3 frontend bucket")]
+        Secrets["Secrets Manager<br/>DB_READER_PASSWORD"]
+    end
+
+    subgraph local["本機環境（ingestion / tagging，規劃遷移雲端）"]
+        Jobs["ingestion + tagging script<br/>手動觸發"]
     end
 
     ThreadsAPI["Threads API<br/>Fetches posts, media"]
     AnthropicAPI["Anthropic API<br/>Keyword tagging"]
 
-    Browser -->|HTTP| App
-    App <-->|queries| DB
-    Jobs -->|writes| DB
+    Browser -->|HTTP| CFFrontend
+    CFFrontend --> S3Frontend
+    Browser -->|HTTP| CFAPI
+    CFAPI --> ALB
+    ALB --> ECS
+    ECS -->|queries| RDS
+    ECS --> S3Media
+    ECS -.->|GetSecretValue| Secrets
+
+    Jobs -.->|暫時直連 5432| RDS
+    Jobs -->|下載| S3Media
     ThreadsAPI --> Jobs
     AnthropicAPI --> Jobs
 
+    classDef planned stroke-dasharray: 5 5
+    class local,Jobs planned
 ```
-這個服務由 app、jobs、db 三個部分組成：
-- app：負責前端與後端交互的 api
-- jobs：批次執行抓取、標記貼文工作，目前為手動觸發，未來規劃改成雲端排程自動執行
-- db：儲存貼文、回覆、標記與圖片 id
+這個服務由 frontend、api、db、jobs 四個部分組成：
+- frontend：靜態網頁，透過 S3 + CloudFront（OAC）發佈
+- api：ECS Fargate 上的 FastAPI，經 ALB／CloudFront 對外提供查詢與篩選功能，透過 Secrets Manager 取得資料庫密碼
+- db：Aurora PostgreSQL Serverless v2，reader／writer 角色分離，儲存貼文、回覆、標記與圖片 id
+- jobs：批次執行抓取、標記貼文工作，**目前仍在本機執行、透過固定 IP 直連 RDS**，為手動觸發，規劃遷移至雲端排程自動執行
 
 ```mermaid
 flowchart LR
-    subgraph ingest["擷取"]
+    subgraph ingest["擷取（本機，規劃遷移雲端）"]
         Threads["Threads 貼文<br/>brownian.motion.99"]
         Ingest["ingestion script<br/>呼叫 Threads API"]
-        Media[("media/<br/>下載圖片・影片縮圖")]
+        Media[("S3 media bucket<br/>圖片・影片縮圖")]
     end
 
-    subgraph tag["標記"]
+    subgraph tag["標記（本機，規劃遷移雲端）"]
         Haiku["general tagging<br/>claude-haiku"]
         Sonnet["specific tagging<br/>claude-sonnet"]
         Review["human review<br/>手動合併同義詞"]
     end
 
-    DB[("Postgres<br/>posts / tags")]
+    DB[("Aurora PostgreSQL<br/>posts / tags")]
 
-    subgraph serve["查詢與顯示"]
-        API["FastAPI routes<br/>filter / search"]
-        Frontend["frontend<br/>post list + detail"]
+    subgraph serve["查詢與顯示（AWS）"]
+        API["FastAPI on ECS Fargate<br/>filter / search"]
+        Frontend["S3 + CloudFront<br/>post list + detail"]
     end
 
     Threads --> Ingest
-    Ingest -->|寫入| DB
-    Ingest -->|下載| Media
+    Ingest -.->|暫時直連寫入| DB
+    Ingest -->|上傳| Media
     DB --> Haiku
-    Haiku -->|寫入分類| DB
+    Haiku -.->|寫入分類| DB
     DB --> Sonnet
-    Sonnet -->|寫入關鍵字| DB
+    Sonnet -.->|寫入關鍵字| DB
     DB -.->|產生 markdown| Review
     Review -.->|人工套用| DB
     DB --> API
     Media --> API
     API --> Frontend
+
+    classDef planned stroke-dasharray: 5 5
+    class ingest,tag,Ingest,Haiku,Sonnet,Review planned
 ```
-透過 threads api 自動抓取貼文後寫入資料庫。透過 anthropic api 呼叫 claude-haiku 進行貼文分類、呼叫 claude-sonnet 生成關鍵字以標記貼文，LLM 生成之關鍵字需定期人工審核。透過由 html/css/js 建置之前端頁面查詢貼文。
+透過 threads api 自動抓取貼文後寫入資料庫，圖片與影片縮圖上傳至 S3 media bucket。透過 anthropic api 呼叫 claude-haiku 進行貼文分類、呼叫 claude-sonnet 生成關鍵字以標記貼文，LLM 生成之關鍵字需定期人工審核。ingestion 與 tagging 目前暫時在本機以固定 IP 直連 Aurora 執行（圖中虛線部分），查詢與顯示則已全面部署於 AWS（ECS Fargate + S3 + CloudFront）。
 
 ## Database
 
@@ -142,8 +165,9 @@ erDiagram
 
 ## Tech Stacks
 - Framework: Python 3.12, FastAPI, vanilla JS
-- Database: PostgreSQL (`psycopg3`)
-- Containerization: Docker compose (app, jobs, db)
+- Database: Aurora PostgreSQL Serverless v2 (`psycopg3`)
+- Containerization: Docker (multi-arch build for Fargate), ECR
+- Cloud infra: ECS Fargate (Express Mode), ALB, CloudFront + S3 (frontend), S3 (media), Secrets Manager, CloudWatch Logs
 - Fetching posts with threads api
 - Categorizing posts wtih `claude-haiku`, extracting keywords from posts with `claude-sonnet`
 
