@@ -3,6 +3,7 @@
 
 <head>
   <title>貼文詳細頁</title>
+  <link rel="icon" href="data:,">
   <script src="common.js"></script>
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="components.css">
@@ -11,6 +12,7 @@
 </head>
 
 <body>
+  <div id="loading-overlay-container"></div>
   <div id="post-detail"></div>
   <div id="site-footer"></div>
 
@@ -143,14 +145,25 @@
     // 4. 初始化（頁面載入時真正執行的進入點）
     // ===================================================================
 
+    document.getElementById("loading-overlay-container").innerHTML = renderLoadingOverlay()
     document.getElementById("site-footer").innerHTML = renderFooter();
 
-    const postId = getPostIdFromUrl();
+    function initialLoad() {
+      showLoadingOverlay();
 
-    fetch(`${API_BASE_URL}/posts/${postId}`)
-      .then(response => response.json())
-      .then(renderPostDetail);
+      const postId = getPostIdFromUrl();
 
+      fetch(`${API_BASE_URL}/posts/${postId}`)
+        .then(response => response.json())
+        .then(post => {
+          renderPostDetail(post);
+          hideLoadingOverlay();
+        })
+        .catch(() => showLoadingError());
+    };
+
+    initialLoad();
+    
   </script>
 
 </body>

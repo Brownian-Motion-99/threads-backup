@@ -3,6 +3,7 @@
 
 <head>
   <title>每天分享一個大氣科學知識直到我沒梗</title>
+  <link rel="icon" href="data:,">
   <script src="common.js"></script>
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="components.css">
@@ -11,6 +12,8 @@
 </head>
 
 <body class="page-wide">
+  <div id="loading-overlay-container"></div>
+
   <header class="site-header">
     <p class="site-eyebrow">FIELD NOTES · ATMOSPHERIC SCIENCE</p>
     <h1 class="site-title">每天分享一個大氣科學知識直到我沒梗</h1>
@@ -206,7 +209,7 @@
       params.append("limit", PAGE_SIZE);
       params.append("offset", currentOffset);
 
-      fetch(`${API_BASE_URL}/posts/search?${params.toString()}`)
+      return fetch(`${API_BASE_URL}/posts/search?${params.toString()}`)
         .then(response => response.json())
         .then(data => renderPostList(data, append));
     }
@@ -218,7 +221,7 @@
       currentOffset = 0;
       currentParams = buildSearchParams();
       updateUrl(currentParams);
-      fetchAndRenderPosts(false);
+      return fetchAndRenderPosts(false);
     }
 
     /**
@@ -264,9 +267,13 @@
     // 7. 初始化（頁面載入時真正執行的進入點）
     // ===================================================================
 
+    document.getElementById("loading-overlay-container").innerHTML = renderLoadingOverlay()
     document.getElementById("site-footer").innerHTML = renderFooter();
 
-    fetch(`${API_BASE_URL}/keywords`)
+    function initialLoad() {
+      showLoadingOverlay();
+
+      fetch(`${API_BASE_URL}/keywords`)
       .then(response => response.json())
       .then(data => {
         const container = document.getElementById("keyword-checkboxes");
@@ -283,8 +290,13 @@
         });
 
         restoreFiltersFromUrl();
-        performSearch();
-      });
+        return performSearch();
+      })
+      .then(() => hideLoadingOverlay())
+      .catch(() => showLoadingError())
+    };
+
+    initialLoad();
 
   </script>
 

@@ -11,7 +11,7 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5500").split(","),
 )
 
 DB_READER_HOST    = os.environ["DB_READER_HOST"]
@@ -39,6 +39,11 @@ def get_readonly_connection():
         dbname          = os.environ["DB_NAME"],
         user            = os.environ["DB_READER_USER"],
         password        = os.environ["DB_READER_PASSWORD"],
+        # host            = os.environ["TEST_DB_HOST"],
+        # port            = os.environ["TEST_DB_PORT"],
+        # dbname          = os.environ["DB_NAME"],
+        # user            = os.environ["TEST_DB_USER"],
+        # password        = os.environ["TEST_DB_PASSWORD"],
         options         = "-c statement_timeout=5000",
         connect_timeout = 10,
         sslmode         = "require",

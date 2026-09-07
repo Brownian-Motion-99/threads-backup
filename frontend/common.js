@@ -1,4 +1,5 @@
-const API_BASE_URL = "d6a26160fio9p.cloudfront.net"
+const API_BASE_URL = "https://d6a26160fio9p.cloudfront.net"
+// const API_BASE_URL = "http://127.0.0.1:8000"
 
 function renderMedia(url) {
   if (url.endsWith(".mp4")) {
@@ -39,4 +40,57 @@ function renderFooter() {
       <p class="footer-meta">© 2026 brownian.motion.99 · v2026.09</p>
     </footer>
   `;
+}
+
+/**
+ * Return the HTML for the loading overlay used during initial data fetch.
+ */
+function renderLoadingOverlay() {
+  return `
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p id="loading-message" class="loading-message">載入中...</p>
+    </div>
+  `;
+}
+
+let loadingMessageTimer = null;
+
+/**
+ * Show the loading overlay and schedule a follow-up message in case
+ * the wait is caused by a serverless database cold start.
+ */
+function showLoadingOverlay() {
+  const overlay = document.getElementById("loading-overlay");
+  if (!overlay) return;
+  overlay.classList.remove("hidden");
+  setLoadingMessage("載入中...");
+
+  loadingMessageTimer = setTimeout(() => {
+    setLoadingMessage("首次載入可能需要多等一下，資料庫正在啟動中...");
+  }, 4000);
+}
+
+/**
+ * Hide the loading overlay and cancel any pending message timer.
+ */
+function hideLoadingOverlay() {
+  clearTimeout(loadingMessageTimer);
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) overlay.classList.add("hidden");
+}
+
+/**
+ * Switch the overlay into an error state with a retry button.
+ *
+ * @param {Function} retryFn - called when the user clicks retry
+ */
+function showLoadingError(retryFn) {
+  clearTimeout(loadingMessageTimer);
+  setLoadingMessage("連線失敗，請確認網路狀況後重試。");
+}
+
+function setLoadingMessage(text) {
+  const el = document.getElementById("loading-message");
+  if (el) el.textContent = text;
 }
