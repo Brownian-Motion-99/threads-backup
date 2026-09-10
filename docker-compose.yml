@@ -10,7 +10,7 @@ services:
     ports:
       - "$DB_PORT:5432"
     volumes:
-      - pgdata-17-test:/var/lib/postgresql/data
+      - pgdata-17:/var/lib/postgresql/data
 
   app:
     build: .
@@ -43,5 +43,4 @@ services:
       - ./media:/app/media
 
 volumes:
-  pgdata:
-  pgdata-17-test:
+  pgdata-17:
