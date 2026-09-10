@@ -45,7 +45,7 @@ def get_readonly_connection():
         # user            = os.environ["DB_USER"],
         # password        = os.environ["DB_PASSWORD"],
         options         = "-c statement_timeout=5000",
-        connect_timeout = 30,
+        connect_timeout = 60,
         sslmode         = "require",
     )
 
